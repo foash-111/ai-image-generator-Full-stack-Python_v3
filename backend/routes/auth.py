@@ -223,7 +223,8 @@ def reset_password_confirm():
     if not token_data:
         return jsonify({
             'success': False,
-            'message': 'Invalid or expired token'
+            # 'message': 'Invalid or expired token'
+            'message': 'You were signing in using Google, back and try again'
         }), 400
     
     # Check if token is expired

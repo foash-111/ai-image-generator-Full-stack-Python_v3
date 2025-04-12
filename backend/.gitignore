@@ -1,0 +1,10 @@
+# Environment files
+.env
+*.env
+
+# Flask instance folder (used for configs and database)
+instance/
+
+# Ignore SQLite database files (if any accidentally leak out of instance/)
+*.db
+*.sqlite3
