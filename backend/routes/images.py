@@ -9,6 +9,7 @@ import json
 import asyncio
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from sqlalchemy.exc import SQLAlchemyError
 
 images_bp = Blueprint('images', __name__)
 
@@ -123,49 +124,105 @@ def delete_image(current_user, image_id):
 @token_required
 def toggle_love_image(current_user, image_id):
     data = request.get_json()
-    is_loved = data.get('isLoved', False)
     
-    # Check if user has access to this image
-    user_image = UserImage.query.filter_by(user_id=current_user.id, image_id=image_id).first()
-    
-    if not user_image:
+    try:
+        # Step 1: Check if image exists in images table
+        image = Image.query.filter_by(id=image_id).first()
+        if not image:
+            image_url = data.get('url')
+            prompt = data.get('prompt')
+            
+            if not image_url or not prompt:
+                return jsonify({
+                    'success': False,
+                    'message': 'Missing required fields: url and prompt'
+                }), 400
+
+            # Insert new image
+            image = Image(image_url=image_url, prompt=prompt)
+            image.id = image_id  # Use provided image_id
+            db.session.add(image)
+            db.session.commit()
+
+        # Step 2: Check if user_image record exists
+        user_image = UserImage.query.filter_by(user_id=current_user.id, image_id=image_id).first()
+        if not user_image:
+            # Create new user_image record
+            user_image = UserImage(
+                user_id=current_user.id,
+                image_id=image_id,
+                is_loved=True,  # Set to True on first love
+                is_saved=False
+            )
+            db.session.add(user_image)
+        else:
+            # Step 3: Toggle is_loved
+            user_image.is_loved = not user_image.is_loved
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f'Image {"loved" if user_image.is_loved else "unloved"} successfully'
+        }), 200
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Image not found or you do not have access'
-        }), 404
-    
-    # Update is_loved status
-    user_image.is_loved = is_loved
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': f'Image {"loved" if is_loved else "unloved"} successfully'
-    })
+            'message': f'Error processing request: {str(e)}'
+        }), 500
 
 @images_bp.route('/<image_id>/save', methods=['PUT'])
 @token_required
 def toggle_save_image(current_user, image_id):
     data = request.get_json()
-    is_saved = data.get('isSaved', False)
-    
-    # Check if user has access to this image
-    user_image = UserImage.query.filter_by(user_id=current_user.id, image_id=image_id).first()
-    
-    if not user_image:
+
+    try:
+        # Step 1: Check if image exists in images table
+        image = Image.query.filter_by(id=image_id).first()
+        if not image:
+            image_url = data.get('url')
+            prompt = data.get('prompt')
+            
+            if not image_url or not prompt:
+                return jsonify({
+                    'success': False,
+                    'message': 'Missing required fields: url and prompt'
+                }), 400
+
+            # Insert new image
+            image = Image(image_url=image_url, prompt=prompt)
+            image.id = image_id  # Use provided image_id
+            db.session.add(image)
+            db.session.commit()
+
+        # Step 2: Check if user_image record exists
+        user_image = UserImage.query.filter_by(user_id=current_user.id, image_id=image_id).first()
+        if not user_image:
+            # Create new user_image record
+            user_image = UserImage(
+                user_id=current_user.id,
+                image_id=image_id,
+                is_loved=False,
+                is_saved=True  # Set to True on first save
+            )
+            db.session.add(user_image)
+        else:
+            # Step 3: Toggle is_saved
+            user_image.is_saved = not user_image.is_saved
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'message': f'Image {"saved" if user_image.is_saved else "unsaved"} successfully'
+        }), 200
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
         return jsonify({
             'success': False,
-            'message': 'Image not found or you do not have access'
-        }), 404
-    
-    # Update is_saved status
-    user_image.is_saved = is_saved
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'message': f'Image {"saved" if is_saved else "unsaved"} successfully'
-    })
+            'message': f'Error processing request: {str(e)}'
+        }), 500
 
 # Async function to generate image with fal.ai
 async def generate_image_async(prompt):
@@ -183,11 +240,11 @@ async def generate_image_async(prompt):
         # Submit the request to fal.ai
         print(f"Submitting request to fal.ai with prompt: {prompt}")
         handler = await fal_client.submit_async(
-            "fal-ai/flux/dev",
-            arguments={
-                "prompt": prompt,
-                "negative_prompt": "blurry, bad quality, distorted, disfigured"
-            }
+          "fal-ai/flux/dev",
+                data={
+                    "prompt": prompt,
+                    "negative_prompt": "blurry, bad quality, distorted, disfigured"
+                }
         )
         
         # Wait for the result
@@ -240,6 +297,8 @@ def generate_image(current_user):
     data = request.get_json()
     prompt = data.get('prompt')
 
+    prompt = prompt + "cartoon style, vibrant colors, clean lines, flat shading, exaggerated features, playful, 2D illustration"
+
     if not prompt:
         return jsonify({
             'success': False,
@@ -265,7 +324,7 @@ def generate_image(current_user):
         
         # Wait for the result with a timeout
         try:
-            image_url = future.result(timeout=15)  # 2-minute timeout
+            image_url = future.result(timeout=15)  # 15 sec timeout
             print(f"Received image URL from future: {image_url}")
         except Exception as e:
             print(f"Error or timeout in image generation: {str(e)}")
