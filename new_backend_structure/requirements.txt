@@ -1,0 +1,13 @@
+flask==2.3.3
+flask-cors==4.0.0
+flask-sqlalchemy==3.1.1
+sqlalchemy==2.0.23
+pyjwt==2.8.0
+bcrypt==4.0.1
+python-dotenv==1.0.0
+google-auth==2.23.4
+requests==2.31.0
+uuid==1.30
+fal-client==0.1.0
+asyncio==3.4.3
+psycopg2-binary==2.9.9  # PostgreSQL adapter for Python

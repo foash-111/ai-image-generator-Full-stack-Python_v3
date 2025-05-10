@@ -13,10 +13,13 @@ load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 # Enable CORS for all routes with proper configuration
-CORS(app, resources={r"/api/*": {"origins": "http://localhost:3000"}})  # Allow frontend to access API
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-# Configure SQLite database
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.sqlite'
+# Neon PostgreSQL Database Configuration
+database_url = os.getenv('DATABASE_URL')
+
+# Configure PostgreSQL database
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = os.getenv('JWT_SECRET', 'default-secret-key')
 
@@ -31,10 +34,10 @@ app.register_blueprint(images_bp, url_prefix='/api/images')
 # Create database tables
 with app.app_context():
     db.create_all()
-
+    
     # Create admin user if it doesn't exist
-    admin_email = os.getenv('ADMIN_EMAIL')
-    admin_password = os.getenv('ADMIN_PASSWORD')
+    admin_email = os.getenv('ADMIN_EMAIL', 'admin@example.com')
+    admin_password = os.getenv('ADMIN_PASSWORD', 'admin123')
 
     admin = User.query.filter_by(email=admin_email).first()
     if not admin:
