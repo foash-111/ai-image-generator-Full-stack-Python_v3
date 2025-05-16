@@ -236,11 +236,12 @@ async def generate_image_async(prompt):
             return None
             
         os.environ["FAL_KEY"] = fal_key
+        prompt = prompt + "cartoon style, vibrant colors, clean lines, flat shading, exaggerated features, playful, 2D illustration"
         
         # Submit the request to fal.ai
         print(f"Submitting request to fal.ai with prompt: {prompt}")
         handler = await fal_client.submit_async(
-          "fal-ai/flux/dev",
+          "fal-ai/fast-lightning-sdxl",
                 data={
                     "prompt": prompt,
                     "negative_prompt": "blurry, bad quality, distorted, disfigured"
